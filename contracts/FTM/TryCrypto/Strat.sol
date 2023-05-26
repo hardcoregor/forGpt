@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity >=0.6.0 <0.8.0;
+pragma solidity ^0.6.12
 
 /*
  * @dev Provides information about the current execution context, including the
@@ -23,7 +23,7 @@ abstract contract Context {
     }
 }
 
-pragma solidity >=0.6.0 <0.8.0;
+pragma solidity ^0.6.12
 
 /**
  * @dev Interface of the ERC20 standard as defined in the EIP.
@@ -99,7 +99,7 @@ interface IERC20 {
     event Approval(address indexed owner, address indexed spender, uint256 value);
 }
 
-pragma solidity >=0.6.0 <0.8.0;
+pragma solidity ^0.6.12
 
 /**
  * @dev Wrappers over Solidity's arithmetic operations with added overflow
@@ -312,7 +312,7 @@ library SafeMath {
     }
 }
 
-pragma solidity >=0.6.0 <0.8.0;
+pragma solidity ^0.6.12
 
 /**
  * @dev Implementation of the {IERC20} interface.
@@ -801,7 +801,7 @@ library Address {
     }
 }
 
-pragma solidity >=0.6.0 <0.8.0;
+pragma solidity ^0.6.12
 
 /**
  * @title SafeERC20
@@ -981,7 +981,7 @@ interface IRewardsGauge {
     function withdraw(uint256 _value) external;
 }
 
-pragma solidity >=0.6.0 <0.8.0;
+pragma solidity ^0.6.12
 
 /**
  * @dev Contract module which provides a basic access control mechanism, where
@@ -1047,7 +1047,7 @@ abstract contract Ownable is Context {
     }
 }
 
-pragma solidity >=0.6.0 <0.8.0;
+pragma solidity ^0.6.12
 
 
 /**
