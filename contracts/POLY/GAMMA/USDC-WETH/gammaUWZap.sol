@@ -737,6 +737,13 @@ interface IUniswapV2Router02 is IUniswapV2Router01 {
         uint deadline,
         bool approveMax, uint8 v, bytes32 r, bytes32 s
     ) external returns (uint amountETH);
+        function deposit(
+        uint deposit0,
+        uint deposit1,
+        address to,
+        address from,
+        uint[4] memory inMin
+    )external returns (uint shares);
 
     function swapExactTokensForTokensSupportingFeeOnTransferTokens(
         uint amountIn,
@@ -787,13 +794,15 @@ contract gammaUWZap {
     using SafeERC20 for IVault;
 
     IYeller yeller;
-    IUniswapV2Router02 public immutable router;
+    IUniswapV2Router02 public immutable router; //TODO: ROUTER FOR SWAP
+    IUniswapV2Router02 public immutable routerLiq; //TODO: ROUTER FOR LIQUIDITY
     address public immutable WETH;
     uint256 public constant minimumAmount = 1000;
     uint256 public constant fee = 1;
 
-    constructor(address _router, address _WETH, address _yeller) {
+    constructor(address _router, address _routerLiq, address _WETH, address _yeller) {
         router = IUniswapV2Router02(_router);
+        routerLiq = IUniswapV2Router02(_routerLiq);
         WETH = _WETH;
         yeller = IYeller(_yeller);
     }
@@ -872,16 +881,19 @@ contract gammaUWZap {
         require(amount1 >= minimumAmount, 'UniswapV2Router: INSUFFICIENT_B_AMOUNT');
     }
 
-    function _getVaultPair (address _vault) private view returns (IVault vault, IUniswapV2Pair pair) {
+    function _getVaultPair (address _vault) private pure returns (IVault vault, IUniswapV2Pair pair) {
         vault = IVault(_vault);
         pair = IUniswapV2Pair(vault.want());
-        require(pair.factory() == router.factory(), 'Zap: Incompatible liquidity pair factory');//TODO: HERE MAYBE PROBLEM
+        // require(pair.factory() == router.factory(), 'Zap: Incompatible liquidity pair factory');//TODO: HERE MAYBE PROBLEM
     }
 
     function _swapAndStake(address _vault, uint256 tokenAmountOutMin, address tokenIn) private {
         (IVault vault, IUniswapV2Pair pair) = _getVaultPair(_vault);
 
-        (uint256 reserveA, uint256 reserveB,) = pair.getReserves(); //TODO: Here we get how much each token in LP
+        // (uint256 reserveA, uint256 reserveB,) = pair.getReserves(); //TODO: ORIGIN
+        (uint256 reserveA, uint256 reserveB,) = pair.getReserves(); //TODO: NEW maybe change to total0 and total1, need to check console
+        console.log(reserveA, 'FIRST RESERVER');
+        console.log(reserveB, 'SECOND RESERVER');
         require(reserveA > minimumAmount && reserveB > minimumAmount, 'Zap: Liquidity pair reserves too low');
 
         bool isInputA = pair.token0() == tokenIn;
@@ -899,16 +911,25 @@ contract gammaUWZap {
             swapAmountIn = _getSwapAmount(fullInvestment, reserveB, reserveA);
         }
 
-        _approveTokenIfNeeded(path[0], address(router));
+        _approveTokenIfNeeded(path[0], address(router)); //TODO: ONE ROUTER FOR SWAP ANOTHER ROUTER FOR ADD LIQ
         uint256[] memory swapedAmounts = router
             .swapExactTokensForTokens(swapAmountIn, tokenAmountOutMin, path, address(this), block.timestamp);
 
-        _approveTokenIfNeeded(path[1], address(router));
-        (,, uint256 amountLiquidity) = router
-            .addLiquidity(path[0], path[1], fullInvestment.sub(swapedAmounts[0]), swapedAmounts[1], 1, 1, address(this), block.timestamp);
+        _approveTokenIfNeeded(path[1], address(router)); 
+        // (,, uint256 amountLiquidity) = router
+        //     .addLiquidity(path[0], path[1], fullInvestment.sub(swapedAmounts[0]), swapedAmounts[1], 1, 1, address(this), block.timestamp); //TODO: ORIGIN
+        if(isInputA) {
+          uint256 amountLiquidity = routerLiq
+              .deposit(fullInvestment.sub(swapedAmounts[0]), swapedAmounts[1], address(this), address(pair), [0,0,0,0]);
+          console.log(address(pair)); 
+        } else {
+          uint256 amountLiquidity = routerLiq
+              .deposit(fullInvestment.sub(swapedAmounts[0]), swapedAmounts[1], address(this), address(pair), [0,0,0,0]);
+        }
 
         _approveTokenIfNeeded(address(pair), address(vault));
         vault.deposit(amountLiquidity);
+        
 
         vault.safeTransfer(address(this), vault.balanceOf(address(this)));
 
