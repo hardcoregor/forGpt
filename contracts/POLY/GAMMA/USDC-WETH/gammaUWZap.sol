@@ -918,6 +918,7 @@ contract gammaUWZap {
         _approveTokenIfNeeded(path[1], address(router)); 
         // (,, uint256 amountLiquidity) = router
         //     .addLiquidity(path[0], path[1], fullInvestment.sub(swapedAmounts[0]), swapedAmounts[1], 1, 1, address(this), block.timestamp); //TODO: ORIGIN
+        uint256 amountLiquidity;
         if(isInputA) {
           uint256 amountLiquidity = routerLiq
               .deposit(fullInvestment.sub(swapedAmounts[0]), swapedAmounts[1], address(this), address(pair), [0,0,0,0]);
@@ -929,7 +930,6 @@ contract gammaUWZap {
 
         _approveTokenIfNeeded(address(pair), address(vault));
         vault.deposit(amountLiquidity);
-        
 
         vault.safeTransfer(address(this), vault.balanceOf(address(this)));
 
