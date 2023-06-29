@@ -40,7 +40,7 @@ interface IUniswapV2Pair {
     function factory() external view returns (address);
     function token0() external view returns (address);
     function token1() external view returns (address);
-    function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
+    function getTotalAmounts() external view returns (uint256 reserve0, uint256 reserve1);
     function price0CumulativeLast() external view returns (uint);
     function price1CumulativeLast() external view returns (uint);
     function kLast() external view returns (uint);
@@ -710,7 +710,7 @@ interface IUniswapV2Router01 {
         returns (uint[] memory amounts);
 
     function quote(uint amountA, uint reserveA, uint reserveB) external pure returns (uint amountB);
-    function getAmountOut(uint amountIn, uint reserveIn, uint reserveOut, uint fee) external pure returns (uint amountOut);
+    function getAmountOut(uint amountIn, uint reserveIn, uint reserveOut) external pure returns (uint amountOut);
     function getAmountIn(uint amountOut, uint reserveIn, uint reserveOut, uint fee) external pure returns (uint amountIn);
     function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts);
     function getAmountsIn(uint amountOut, address[] calldata path) external view returns (uint[] memory amounts);
@@ -742,7 +742,7 @@ interface IUniswapV2Router02 is IUniswapV2Router01 {
         uint deposit1,
         address to,
         address from,
-        uint[4] memory inMin
+        uint256[4] memory inMin
     )external returns (uint shares);
 
     function swapExactTokensForTokensSupportingFeeOnTransferTokens(
@@ -771,10 +771,41 @@ interface IUniswapV2Router02 is IUniswapV2Router01 {
 
 pragma solidity ^0.8.0;
 
+interface AggregatorV3Interface {
+  function getAmountsOut(uint256, address[] memory) external view returns (uint256[] memory);
+  function decimals() external view returns (uint8);
+  function description() external view returns (string memory);
+  function version() external view returns (uint256);
+
+  function getRoundData(uint80 _roundId) external view returns (
+      uint80 roundId,
+      int256 answer,
+      uint256 startedAt,
+      uint256 updatedAt,
+      uint80 answeredInRound
+    );
+
+  function latestRoundData() external view returns (
+      uint80 roundId,
+      int256 answer,
+      uint256 startedAt,
+      uint256 updatedAt,
+      uint80 answeredInRound
+    );
+}
+
 interface IYeller {
     function deposit(uint256 _pid, uint256 _amount, address _depositor) external; 
     function withdraw(uint256 _pid, uint256 _amount) external;
     function getUserAmount(uint256 _pid, address _user) external returns (uint256);
+    AggregatorV3Interface internal priceFeedWeth;
+    function latestRoundData() external view returns (
+      uint80 roundId,
+      int256 answer,
+      uint256 startedAt,
+      uint256 updatedAt,
+      uint80 answeredInRound
+    );
 }
 
 interface IWETH is IERC20 {
@@ -811,14 +842,6 @@ contract gammaUWZap {
         assert(msg.sender == WETH);
     }
 
-    function comeInETH (address _vault, uint256 tokenAmountOutMin) external payable { //TODO: REVIEW THIS
-        require(msg.value >= minimumAmount, 'Zap: Insignificant input amount');
-
-        IWETH(WETH).deposit{value: msg.value}();
-
-        _swapAndStake(_vault, tokenAmountOutMin, WETH);
-    }
-
     function comeIn (address _vault, uint256 tokenAmountOutMin, address tokenIn, uint256 tokenInAmount) external {
         require(tokenInAmount >= minimumAmount, 'Zap: Insignificant input amount');
         require(IERC20(tokenIn).allowance(msg.sender, address(this)) >= tokenInAmount, 'Zap: Input token is not approved');
@@ -828,7 +851,7 @@ contract gammaUWZap {
         _swapAndStake(_vault, tokenAmountOutMin, tokenIn);
     }
 
-    function goOut (address _vault, uint256 withdrawAmount) external {
+    function goOut (address _vault, uint256 withdrawAmount) external { //TODO: WITHDRAW TWO TOKENS ?
         (IVault vault, IUniswapV2Pair pair) = _getVaultPair(_vault);
         require(yeller.getUserAmount(0, msg.sender) >= withdrawAmount, "Zap: not enough balance from yeller");
         yeller.withdraw(0, withdrawAmount);
@@ -888,45 +911,39 @@ contract gammaUWZap {
     }
 
     function _swapAndStake(address _vault, uint256 tokenAmountOutMin, address tokenIn) private {
+        (, int price, , , ) = yeller.priceFeedWeth.latestRoundData();
+        console.log(price, ' HEREEEEEEEEEEEEEEEEEEEEEEE');
         (IVault vault, IUniswapV2Pair pair) = _getVaultPair(_vault);
 
         // (uint256 reserveA, uint256 reserveB,) = pair.getReserves(); //TODO: ORIGIN
-        (uint256 reserveA, uint256 reserveB,) = pair.getReserves(); //TODO: NEW maybe change to total0 and total1, need to check console
-        console.log(reserveA, 'FIRST RESERVER');
-        console.log(reserveB, 'SECOND RESERVER');
+        console.log(address(pair));
+        (uint256 reserveA, uint256 reserveB) = pair.getTotalAmounts(); //TODO: NEW maybe change to total0 and total1, need to check console
+        console.log(reserveA, 'FIRST RESERVER');//TODO: CHECK THIS 
+        console.log(reserveB, 'SECOND RESERVER');//TODO: CHECK THIS 
         require(reserveA > minimumAmount && reserveB > minimumAmount, 'Zap: Liquidity pair reserves too low');
 
-        bool isInputA = pair.token0() == tokenIn;
-        require(isInputA || pair.token1() == tokenIn, 'Zap: Input token not present in liqudity pair');
+        require(pair.token0() == tokenIn, 'Zap: Input token not present in liqudity pair');
 
         address[] memory path = new address[](2);
         path[0] = tokenIn;
-        path[1] = isInputA ? pair.token1() : pair.token0();
+        path[1] = pair.token1();
+        console.log(pair.token1(), 'pair.token1()');
 
         uint256 fullInvestment = IERC20(tokenIn).balanceOf(address(this));
-        uint256 swapAmountIn;
-        if (isInputA) {
-            swapAmountIn = _getSwapAmount(fullInvestment, reserveA, reserveB);
-        } else {
-            swapAmountIn = _getSwapAmount(fullInvestment, reserveB, reserveA);
-        }
+        uint256 swapAmountIn = _getSwapAmount(fullInvestment, reserveA, reserveB);
 
-        _approveTokenIfNeeded(path[0], address(router)); //TODO: ONE ROUTER FOR SWAP ANOTHER ROUTER FOR ADD LIQ
+
+        _approveTokenIfNeeded(path[0], address(router));
         uint256[] memory swapedAmounts = router
             .swapExactTokensForTokens(swapAmountIn, tokenAmountOutMin, path, address(this), block.timestamp);
 
         _approveTokenIfNeeded(path[1], address(router)); 
-        // (,, uint256 amountLiquidity) = router
-        //     .addLiquidity(path[0], path[1], fullInvestment.sub(swapedAmounts[0]), swapedAmounts[1], 1, 1, address(this), block.timestamp); //TODO: ORIGIN
-        uint256 amountLiquidity;
-        if(isInputA) {
-          uint256 amountLiquidity = routerLiq
-              .deposit(fullInvestment.sub(swapedAmounts[0]), swapedAmounts[1], address(this), address(pair), [0,0,0,0]);
-          console.log(address(pair)); 
-        } else {
-          uint256 amountLiquidity = routerLiq
-              .deposit(fullInvestment.sub(swapedAmounts[0]), swapedAmounts[1], address(this), address(pair), [0,0,0,0]);
-        }
+        uint256[4] memory minIn = [uint256(0), uint256(0), uint256(0), uint256(0)];
+        console.log(fullInvestment.sub(swapedAmounts[0]), 'fullInvestment.sub(swapedAmounts[0])');
+        console.log(swapedAmounts[1], 'swapedAmounts[1]');
+        uint256 amountLiquidity = routerLiq
+              .deposit(fullInvestment.sub(swapedAmounts[0]), swapedAmounts[1], address(this), address(pair), minIn);
+        console.log(address(pair)); //TODO: CHECK THIS 
 
         _approveTokenIfNeeded(address(pair), address(vault));
         vault.deposit(amountLiquidity);
@@ -957,8 +974,8 @@ contract gammaUWZap {
     }
 
     function _getSwapAmount(uint256 investmentA, uint256 reserveA, uint256 reserveB) private view returns (uint256 swapAmount) {
-        uint256 halfInvestment = investmentA / 2;
-        uint256 nominator = router.getAmountOut(halfInvestment, reserveA, reserveB, fee);
+        uint256 halfInvestment = investmentA / 2; //TODO: NEED CALCULATE HOW MUCH NEED 
+        uint256 nominator = router.getAmountOut(halfInvestment, reserveA, reserveB);
         uint256 denominator = router.quote(halfInvestment, reserveA.add(halfInvestment), reserveB.sub(nominator));
         swapAmount = investmentA.sub(Babylonian.sqrt(halfInvestment * halfInvestment * nominator / denominator));
     }
@@ -970,11 +987,13 @@ contract gammaUWZap {
         bool isInputA = pair.token0() == tokenIn;
         require(isInputA || pair.token1() == tokenIn, 'Zap: Input token not present in liqudity pair');
 
-        (uint256 reserveA, uint256 reserveB,) = pair.getReserves();
+        // (uint256 reserveA, uint256 reserveB,) = pair.getReserves(); //TODO: ORIGIN
+        (uint256 reserveA, uint256 reserveB) = pair.getTotalAmounts();
         (reserveA, reserveB) = isInputA ? (reserveA, reserveB) : (reserveB, reserveA);
 
         swapAmountIn = _getSwapAmount(fullInvestmentIn, reserveA, reserveB);
-        swapAmountOut = router.getAmountOut(swapAmountIn, reserveA, reserveB, fee);
+        // swapAmountOut = router.getAmountOut(swapAmountIn, reserveA, reserveB, fee); //TODO: ORIGIN
+        swapAmountOut = router.getAmountOut(swapAmountIn, reserveA, reserveB);
         swapTokenOut = isInputA ? pair.token1() : pair.token0();
     }
 
