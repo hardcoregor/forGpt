@@ -1,112 +1,85 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.0;
-import 'hardhat/console.sol';
-
-interface IUniswapV2Pair {
-    event Approval(address indexed owner, address indexed spender, uint value);
-    event Transfer(address indexed from, address indexed to, uint value);
-
-    function name() external pure returns (string memory);
-    function symbol() external pure returns (string memory);
-    function decimals() external pure returns (uint8);
-    function totalSupply() external view returns (uint);
-    function balanceOf(address owner) external view returns (uint);
-    function allowance(address owner, address spender) external view returns (uint);
-
-    function approve(address spender, uint value) external returns (bool);
-    function transfer(address to, uint value) external returns (bool);
-    function transferFrom(address from, address to, uint value) external returns (bool);
-
-    function DOMAIN_SEPARATOR() external view returns (bytes32);
-    function PERMIT_TYPEHASH() external pure returns (bytes32);
-    function nonces(address owner) external view returns (uint);
-
-    function permit(address owner, address spender, uint value, uint deadline, uint8 v, bytes32 r, bytes32 s) external;
-
-    event Mint(address indexed sender, uint amount0, uint amount1);
-    event Burn(address indexed sender, uint amount0, uint amount1, address indexed to);
-    event Swap(
-        address indexed sender,
-        uint amount0In,
-        uint amount1In,
-        uint amount0Out,
-        uint amount1Out,
-        address indexed to
-    );
-    event Sync(uint112 reserve0, uint112 reserve1);
-
-    function MINIMUM_LIQUIDITY() external pure returns (uint);
-    function factory() external view returns (address);
-    function token0() external view returns (address);
-    function token1() external view returns (address);
-    function getTotalAmounts() external view returns (uint256 reserve0, uint256 reserve1);
-    function price0CumulativeLast() external view returns (uint);
-    function price1CumulativeLast() external view returns (uint);
-    function kLast() external view returns (uint);
-
-    function mint(address to) external returns (uint liquidity);
-    function burn(address to) external returns (uint amount0, uint amount1);
-    function swap(uint amount0Out, uint amount1Out, address to, bytes calldata data) external;
-    function skim(address to) external;
-    function sync() external;
-
-    function initialize(address, address) external;
-}
+import 'hardhat/console.sol'; //TODO: Delete this
 
 pragma solidity ^0.8.0;
 
-// computes square roots using the babylonian method
-// https://en.wikipedia.org/wiki/Methods_of_computing_square_roots#Babylonian_method
-library Babylonian {
-    // credit for this implementation goes to
-    // https://github.com/abdk-consulting/abdk-libraries-solidity/blob/master/ABDKMath64x64.sol#L687
-    function sqrt(uint256 x) internal pure returns (uint256) {
-        if (x == 0) return 0;
-        // this block is equivalent to r = uint256(1) << (BitMath.mostSignificantBit(x) / 2);
-        // however that code costs significantly more gas
-        uint256 xx = x;
-        uint256 r = 1;
-        if (xx >= 0x100000000000000000000000000000000) {
-            xx >>= 128;
-            r <<= 64;
-        }
-        if (xx >= 0x10000000000000000) {
-            xx >>= 64;
-            r <<= 32;
-        }
-        if (xx >= 0x100000000) {
-            xx >>= 32;
-            r <<= 16;
-        }
-        if (xx >= 0x10000) {
-            xx >>= 16;
-            r <<= 8;
-        }
-        if (xx >= 0x100) {
-            xx >>= 8;
-            r <<= 4;
-        }
-        if (xx >= 0x10) {
-            xx >>= 4;
-            r <<= 2;
-        }
-        if (xx >= 0x8) {
-            r <<= 1;
-        }
-        r = (r + x / r) >> 1;
-        r = (r + x / r) >> 1;
-        r = (r + x / r) >> 1;
-        r = (r + x / r) >> 1;
-        r = (r + x / r) >> 1;
-        r = (r + x / r) >> 1;
-        r = (r + x / r) >> 1; // Seven iterations should be enough
-        uint256 r1 = x / r;
-        return (r < r1 ? r : r1);
+abstract contract Context {
+    function _msgSender() internal view virtual returns (address payable) {
+        return payable(msg.sender);
     }
 }
 
-pragma solidity ^0.8.0;
+abstract contract Ownable is Context {
+    address private _owner;
+
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
+    /**
+     * @dev Initializes the contract setting the deployer as the initial owner.
+     */
+    constructor() {
+        _transferOwnership(_msgSender());
+    }
+
+    /**
+     * @dev Throws if called by any account other than the owner.
+     */
+    modifier onlyOwner() {
+        _checkOwner();
+        _;
+    }
+
+    /**
+     * @dev Returns the address of the current owner.
+     */
+    function owner() public view virtual returns (address) {
+        return _owner;
+    }
+
+    /**
+     * @dev Throws if the sender is not the owner.
+     */
+    function _checkOwner() internal view virtual {
+        require(owner() == _msgSender(), "Ownable: caller is not the owner");
+    }
+
+    /**
+     * @dev Leaves the contract without owner. It will not be possible to call
+     * `onlyOwner` functions anymore. Can only be called by the current owner.
+     *
+     * NOTE: Renouncing ownership will leave the contract without an owner,
+     * thereby removing any functionality that is only available to the owner.
+     */
+    function renounceOwnership() public virtual onlyOwner {
+        _transferOwnership(address(0));
+    }
+
+    /**
+     * @dev Transfers ownership of the contract to a new account (`newOwner`).
+     * Can only be called by the current owner.
+     */
+    function transferOwnership(address newOwner) public virtual onlyOwner {
+        require(newOwner != address(0), "Ownable: new owner is the zero address");
+        _transferOwnership(newOwner);
+    }
+
+    /**
+     * @dev Transfers ownership of the contract to a new account (`newOwner`).
+     * Internal function without access restriction.
+     */
+    function _transferOwnership(address newOwner) internal virtual {
+        address oldOwner = _owner;
+        _owner = newOwner;
+        emit OwnershipTransferred(oldOwner, newOwner);
+    }
+}
+
+interface IUniswapV2Pair {
+    function token0() external view returns (address);
+    function token1() external view returns (address);
+    function getTotalAmounts() external view returns (uint256 reserve0, uint256 reserve1);
+}
 
 /**
  * @dev Interface of the ERC20 standard as defined in the EIP.
@@ -182,166 +155,6 @@ interface IERC20 {
     event Approval(address indexed owner, address indexed spender, uint256 value);
 }
 
-pragma solidity ^0.8.0;
-
-/**
- * @dev Wrappers over Solidity's arithmetic operations with added overflow
- * checks.
- *
- * Arithmetic operations in Solidity wrap on overflow. This can easily result
- * in bugs, because programmers usually assume that an overflow raises an
- * error, which is the standard behavior in high level programming languages.
- * `SafeMath` restores this intuition by reverting the transaction when an
- * operation overflows.
- *
- * Using this library instead of the unchecked operations eliminates an entire
- * class of bugs, so it's recommended to use it always.
- */
-library SafeMath {
-    /**
-     * @dev Returns the addition of two unsigned integers, reverting on
-     * overflow.
-     *
-     * Counterpart to Solidity's `+` operator.
-     *
-     * Requirements:
-     *
-     * - Addition cannot overflow.
-     */
-    function add(uint256 a, uint256 b) internal pure returns (uint256) {
-        uint256 c = a + b;
-        require(c >= a, "SafeMath: addition overflow");
-
-        return c;
-    }
-
-    /**
-     * @dev Returns the subtraction of two unsigned integers, reverting on
-     * overflow (when the result is negative).
-     *
-     * Counterpart to Solidity's `-` operator.
-     *
-     * Requirements:
-     *
-     * - Subtraction cannot overflow.
-     */
-    function sub(uint256 a, uint256 b) internal pure returns (uint256) {
-        return sub(a, b, "SafeMath: subtraction overflow");
-    }
-
-    /**
-     * @dev Returns the subtraction of two unsigned integers, reverting with custom message on
-     * overflow (when the result is negative).
-     *
-     * Counterpart to Solidity's `-` operator.
-     *
-     * Requirements:
-     *
-     * - Subtraction cannot overflow.
-     */
-    function sub(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
-        require(b <= a, errorMessage);
-        uint256 c = a - b;
-
-        return c;
-    }
-
-    /**
-     * @dev Returns the multiplication of two unsigned integers, reverting on
-     * overflow.
-     *
-     * Counterpart to Solidity's `*` operator.
-     *
-     * Requirements:
-     *
-     * - Multiplication cannot overflow.
-     */
-    function mul(uint256 a, uint256 b) internal pure returns (uint256) {
-        // Gas optimization: this is cheaper than requiring 'a' not being zero, but the
-        // benefit is lost if 'b' is also tested.
-        // See: https://github.com/OpenZeppelin/openzeppelin-contracts/pull/522
-        if (a == 0) {
-            return 0;
-        }
-
-        uint256 c = a * b;
-        require(c / a == b, "SafeMath: multiplication overflow");
-
-        return c;
-    }
-
-    /**
-     * @dev Returns the integer division of two unsigned integers. Reverts on
-     * division by zero. The result is rounded towards zero.
-     *
-     * Counterpart to Solidity's `/` operator. Note: this function uses a
-     * `revert` opcode (which leaves remaining gas untouched) while Solidity
-     * uses an invalid opcode to revert (consuming all remaining gas).
-     *
-     * Requirements:
-     *
-     * - The divisor cannot be zero.
-     */
-    function div(uint256 a, uint256 b) internal pure returns (uint256) {
-        return div(a, b, "SafeMath: division by zero");
-    }
-
-    /**
-     * @dev Returns the integer division of two unsigned integers. Reverts with custom message on
-     * division by zero. The result is rounded towards zero.
-     *
-     * Counterpart to Solidity's `/` operator. Note: this function uses a
-     * `revert` opcode (which leaves remaining gas untouched) while Solidity
-     * uses an invalid opcode to revert (consuming all remaining gas).
-     *
-     * Requirements:
-     *
-     * - The divisor cannot be zero.
-     */
-    function div(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
-        require(b > 0, errorMessage);
-        uint256 c = a / b;
-        // assert(a == b * c + a % b); // There is no case in which this doesn't hold
-
-        return c;
-    }
-
-    /**
-     * @dev Returns the remainder of dividing two unsigned integers. (unsigned integer modulo),
-     * Reverts when dividing by zero.
-     *
-     * Counterpart to Solidity's `%` operator. This function uses a `revert`
-     * opcode (which leaves remaining gas untouched) while Solidity uses an
-     * invalid opcode to revert (consuming all remaining gas).
-     *
-     * Requirements:
-     *
-     * - The divisor cannot be zero.
-     */
-    function mod(uint256 a, uint256 b) internal pure returns (uint256) {
-        return mod(a, b, "SafeMath: modulo by zero");
-    }
-
-    /**
-     * @dev Returns the remainder of dividing two unsigned integers. (unsigned integer modulo),
-     * Reverts with custom message when dividing by zero.
-     *
-     * Counterpart to Solidity's `%` operator. This function uses a `revert`
-     * opcode (which leaves remaining gas untouched) while Solidity uses an
-     * invalid opcode to revert (consuming all remaining gas).
-     *
-     * Requirements:
-     *
-     * - The divisor cannot be zero.
-     */
-    function mod(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
-        require(b != 0, errorMessage);
-        return a % b;
-    }
-}
-
-pragma solidity ^0.8.0;
-
 /**
  * @dev Collection of functions related to the address type
  */
@@ -372,30 +185,6 @@ library Address {
         // solhint-disable-next-line no-inline-assembly
         assembly { size := extcodesize(account) }
         return size > 0;
-    }
-
-    /**
-     * @dev Replacement for Solidity's `transfer`: sends `amount` wei to
-     * `recipient`, forwarding all available gas and reverting on errors.
-     *
-     * https://eips.ethereum.org/EIPS/eip-1884[EIP1884] increases the gas cost
-     * of certain opcodes, possibly making contracts go over the 2300 gas limit
-     * imposed by `transfer`, making them unable to receive funds via
-     * `transfer`. {sendValue} removes this limitation.
-     *
-     * https://diligence.consensys.net/posts/2019/09/stop-using-soliditys-transfer-now/[Learn more].
-     *
-     * IMPORTANT: because control is transferred to `recipient`, care must be
-     * taken to not create reentrancy vulnerabilities. Consider using
-     * {ReentrancyGuard} or the
-     * https://solidity.readthedocs.io/en/v0.5.11/security-considerations.html#use-the-checks-effects-interactions-pattern[checks-effects-interactions pattern].
-     */
-    function sendValue(address payable recipient, uint256 amount) internal {
-        require(address(this).balance >= amount, "Address: insufficient balance");
-
-        // solhint-disable-next-line avoid-low-level-calls, avoid-call-value
-        (bool success, ) = recipient.call{ value: amount }("");
-        require(success, "Address: unable to send value, recipient may have reverted");
     }
 
     /**
@@ -504,8 +293,6 @@ library Address {
     }
 }
 
-pragma solidity ^0.8.0;
-
 /**
  * @title SafeERC20
  * @dev Wrappers around ERC20 operations that throw on failure (when the token
@@ -516,7 +303,6 @@ pragma solidity ^0.8.0;
  * which allows you to call the safe operations as `token.safeTransfer(...)`, etc.
  */
 library SafeERC20 {
-    using SafeMath for uint256;
     using Address for address;
 
     function safeTransfer(IERC20 token, address to, uint256 value) internal {
@@ -544,17 +330,7 @@ library SafeERC20 {
         );
         _callOptionalReturn(token, abi.encodeWithSelector(token.approve.selector, spender, value));
     }
-
-    function safeIncreaseAllowance(IERC20 token, address spender, uint256 value) internal {
-        uint256 newAllowance = token.allowance(address(this), spender).add(value);
-        _callOptionalReturn(token, abi.encodeWithSelector(token.approve.selector, spender, newAllowance));
-    }
-
-    function safeDecreaseAllowance(IERC20 token, address spender, uint256 value) internal {
-        uint256 newAllowance = token.allowance(address(this), spender).sub(value, "SafeERC20: decreased allowance below zero");
-        _callOptionalReturn(token, abi.encodeWithSelector(token.approve.selector, spender, newAllowance));
-    }
-
+    
     /**
      * @dev Imitates a Solidity high-level call (i.e. a regular function call to a contract), relaxing the requirement
      * on the return value: the return value is optional (but if data is returned, it must not be false).
@@ -574,112 +350,8 @@ library SafeERC20 {
     }
 }
 
-pragma solidity ^0.8.0;
-
-/// @title Optimized overflow and underflow safe math operations
-/// @notice Contains methods for doing math operations that revert on overflow or underflow for minimal gas cost
-library LowGasSafeMath {
-    /// @notice Returns x + y, reverts if sum overflows uint256
-    /// @param x The augend
-    /// @param y The addend
-    /// @return z The sum of x and y
-    function add(uint256 x, uint256 y) internal pure returns (uint256 z) {
-        require((z = x + y) >= x);
-    }
-
-    /// @notice Returns x - y, reverts if underflows
-    /// @param x The minuend
-    /// @param y The subtrahend
-    /// @return z The difference of x and y
-    function sub(uint256 x, uint256 y) internal pure returns (uint256 z) {
-        require((z = x - y) <= x);
-    }
-
-    /// @notice Returns x * y, reverts if overflows
-    /// @param x The multiplicand
-    /// @param y The multiplier
-    /// @return z The product of x and y
-    function mul(uint256 x, uint256 y) internal pure returns (uint256 z) {
-        require(x == 0 || (z = x * y) / x == y);
-    }
-
-    /// @notice Returns x + y, reverts if overflows or underflows
-    /// @param x The augend
-    /// @param y The addend
-    /// @return z The sum of x and y
-    function add(int256 x, int256 y) internal pure returns (int256 z) {
-        require((z = x + y) >= x == (y >= 0));
-    }
-
-    /// @notice Returns x - y, reverts if overflows or underflows
-    /// @param x The minuend
-    /// @param y The subtrahend
-    /// @return z The difference of x and y
-    function sub(int256 x, int256 y) internal pure returns (int256 z) {
-        require((z = x - y) <= x == (y >= 0));
-    }
-}
-
-pragma solidity ^0.8.0;
-
 interface IUniswapV2Router01 {
-    function factory() external pure returns (address);
     function WETH() external pure returns (address);
-
-    function addLiquidity(
-        address tokenA,
-        address tokenB,
-        uint amountADesired,
-        uint amountBDesired,
-        uint amountAMin,
-        uint amountBMin,
-        address to,
-        uint deadline
-    ) external returns (uint amountA, uint amountB, uint liquidity);
-    function addLiquidityETH(
-        address token,
-        uint amountTokenDesired,
-        uint amountTokenMin,
-        uint amountETHMin,
-        address to,
-        uint deadline
-    ) external payable returns (uint amountToken, uint amountETH, uint liquidity);
-    function removeLiquidity(
-        address tokenA,
-        address tokenB,
-        uint liquidity,
-        uint amountAMin,
-        uint amountBMin,
-        address to,
-        uint deadline
-    ) external returns (uint amountA, uint amountB);
-    function removeLiquidityETH(
-        address token,
-        uint liquidity,
-        uint amountTokenMin,
-        uint amountETHMin,
-        address to,
-        uint deadline
-    ) external returns (uint amountToken, uint amountETH);
-    function removeLiquidityWithPermit(
-        address tokenA,
-        address tokenB,
-        uint liquidity,
-        uint amountAMin,
-        uint amountBMin,
-        address to,
-        uint deadline,
-        bool approveMax, uint8 v, bytes32 r, bytes32 s
-    ) external returns (uint amountA, uint amountB);
-    function removeLiquidityETHWithPermit(
-        address token,
-        uint liquidity,
-        uint amountTokenMin,
-        uint amountETHMin,
-        address to,
-        uint deadline,
-        bool approveMax, uint8 v, bytes32 r, bytes32 s
-    ) external returns (uint amountToken, uint amountETH);
     function swapExactTokensForTokens(
         uint amountIn,
         uint amountOutMin,
@@ -687,56 +359,9 @@ interface IUniswapV2Router01 {
         address to,
         uint deadline
     ) external returns (uint[] memory amounts);
-    function swapTokensForExactTokens(
-        uint amountOut,
-        uint amountInMax,
-        address[] calldata path,
-        address to,
-        uint deadline
-    ) external returns (uint[] memory amounts);
-    function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline)
-        external
-        payable
-        returns (uint[] memory amounts);
-    function swapTokensForExactETH(uint amountOut, uint amountInMax, address[] calldata path, address to, uint deadline)
-        external
-        returns (uint[] memory amounts);
-    function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline)
-        external
-        returns (uint[] memory amounts);
-    function swapETHForExactTokens(uint amountOut, address[] calldata path, address to, uint deadline)
-        external
-        payable
-        returns (uint[] memory amounts);
-
-    function quote(uint amountA, uint reserveA, uint reserveB) external pure returns (uint amountB);
-    function getAmountOut(uint amountIn, uint reserveIn, uint reserveOut) external pure returns (uint amountOut);
-    function getAmountIn(uint amountOut, uint reserveIn, uint reserveOut, uint fee) external pure returns (uint amountIn);
-    function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts);
-    function getAmountsIn(uint amountOut, address[] calldata path) external view returns (uint[] memory amounts);
 }
 
-pragma solidity ^0.8.0;
-
-
 interface IUniswapV2Router02 is IUniswapV2Router01 {
-    function removeLiquidityETHSupportingFeeOnTransferTokens(
-        address token,
-        uint liquidity,
-        uint amountTokenMin,
-        uint amountETHMin,
-        address to,
-        uint deadline
-    ) external returns (uint amountETH);
-    function removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(
-        address token,
-        uint liquidity,
-        uint amountTokenMin,
-        uint amountETHMin,
-        address to,
-        uint deadline,
-        bool approveMax, uint8 v, bytes32 r, bytes32 s
-    ) external returns (uint amountETH);
         function deposit(
         uint deposit0,
         uint deposit1,
@@ -745,71 +370,21 @@ interface IUniswapV2Router02 is IUniswapV2Router01 {
         uint256[4] memory inMin
     )external returns (uint shares);
 
-    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
-        uint amountIn,
-        uint amountOutMin,
-        address[] calldata path,
-        address to,
-        uint deadline
-    ) external;
-    function swapExactETHForTokensSupportingFeeOnTransferTokens(
-        uint amountOutMin,
-        address[] calldata path,
-        address to,
-        uint deadline
-    ) external payable;
-    function swapExactTokensForETHSupportingFeeOnTransferTokens(
-        uint amountIn,
-        uint amountOutMin,
-        address[] calldata path,
-        address to,
-        uint deadline
-    ) external;
-}
-
-// @notice This contract adds liquidity to Uniswap V2 compatible liquidity pair pools and stake.
-
-pragma solidity ^0.8.0;
-
-interface AggregatorV3Interface {
-  function getAmountsOut(uint256, address[] memory) external view returns (uint256[] memory);
-  function decimals() external view returns (uint8);
-  function description() external view returns (string memory);
-  function version() external view returns (uint256);
-
-  function getRoundData(uint80 _roundId) external view returns (
-      uint80 roundId,
-      int256 answer,
-      uint256 startedAt,
-      uint256 updatedAt,
-      uint80 answeredInRound
-    );
-
-  function latestRoundData() external view returns (
-      uint80 roundId,
-      int256 answer,
-      uint256 startedAt,
-      uint256 updatedAt,
-      uint80 answeredInRound
-    );
+    function getDepositAmount(
+        address pos,
+        address token,
+        uint deposit
+    ) external view returns(uint256, uint256);
 }
 
 interface IYeller {
     function deposit(uint256 _pid, uint256 _amount, address _depositor) external; 
     function withdraw(uint256 _pid, uint256 _amount) external;
     function getUserAmount(uint256 _pid, address _user) external returns (uint256);
-    AggregatorV3Interface internal priceFeedWeth;
-    function latestRoundData() external view returns (
-      uint80 roundId,
-      int256 answer,
-      uint256 startedAt,
-      uint256 updatedAt,
-      uint80 answeredInRound
-    );
+    function getWethData() external view returns (uint256);
 }
 
 interface IWETH is IERC20 {
-    function deposit() external payable;
     function withdraw(uint256 wad) external;
 }
 
@@ -819,14 +394,17 @@ interface IVault is IERC20 {
     function want() external pure returns (address);
 }
 
-contract gammaUWZap {
-    using LowGasSafeMath for uint256;
+interface IMasterChef {
+    function withdraw(uint256 _amount, address _to, address _from, uint256[4] memory minAmounts) external;
+}
+
+contract gammaUWZap is Ownable {
     using SafeERC20 for IERC20;
     using SafeERC20 for IVault;
 
     IYeller yeller;
-    IUniswapV2Router02 public immutable router; //TODO: ROUTER FOR SWAP
-    IUniswapV2Router02 public immutable routerLiq; //TODO: ROUTER FOR LIQUIDITY
+    IUniswapV2Router02 public immutable router;
+    IUniswapV2Router02 public immutable routerLiq;
     address public immutable WETH;
     uint256 public constant minimumAmount = 1000;
     uint256 public constant fee = 1;
@@ -851,75 +429,45 @@ contract gammaUWZap {
         _swapAndStake(_vault, tokenAmountOutMin, tokenIn);
     }
 
-    function goOut (address _vault, uint256 withdrawAmount) external { //TODO: WITHDRAW TWO TOKENS ?
+    function goOut (address _vault, uint256 _withdrawAmount, address _tokenOut) external {
         (IVault vault, IUniswapV2Pair pair) = _getVaultPair(_vault);
-        require(yeller.getUserAmount(0, msg.sender) >= withdrawAmount, "Zap: not enough balance from yeller");
-        yeller.withdraw(0, withdrawAmount);
+        require(yeller.getUserAmount(0, msg.sender) >= _withdrawAmount, "Zap: not enough balance from yeller");
+        yeller.withdraw(0, _withdrawAmount);
  
-        IERC20(_vault).safeTransferFrom(msg.sender, address(this), withdrawAmount);
+        IERC20(_vault).safeTransferFrom(msg.sender, address(this), _withdrawAmount);
 
-        vault.withdraw(withdrawAmount);
-        if (pair.token0() != WETH && pair.token1() != WETH) {
-            return _removeLiqudity(address(pair), msg.sender);
+        vault.withdraw(_withdrawAmount);
+        _removeLiqudity(address(pair), _withdrawAmount);
+
+        address[] memory tokens;
+        
+        if(_tokenOut == pair.token0()){
+
+        } else if (_tokenOut == pair.token1()) {
+
+        } else {
+            tokens = new address[](2);
+            tokens[0] = pair.token0();
+            tokens[1] = pair.token1();
         }
-        _removeLiqudity(address(pair), address(this));
-
-        address[] memory tokens = new address[](2);
-        tokens[0] = pair.token0();
-        tokens[1] = pair.token1();
 
         _returnAssets(tokens);
     }
 
-    function goOutAndSwap(address _vault, uint256 withdrawAmount, address desiredToken, uint256 desiredTokenOutMin) external {
-        (IVault vault, IUniswapV2Pair pair) = _getVaultPair(_vault);
-
-        require(yeller.getUserAmount(0, msg.sender) >= withdrawAmount, "Zap: not enough balance from yeller");
-        yeller.withdraw(0, withdrawAmount);
-
-        address token0 = pair.token0();
-        address token1 = pair.token1();
-        require(token0 == desiredToken || token1 == desiredToken, 'Zap: desired token not present in liqudity pair');
-
-        vault.safeTransferFrom(msg.sender, address(this), withdrawAmount);
-        vault.withdraw(withdrawAmount);
-        _removeLiqudity(address(pair), address(this));
-
-        address swapToken = token1 == desiredToken ? token0 : token1;
-        address[] memory path = new address[](2);
-        path[0] = swapToken;
-        path[1] = desiredToken;
-
-        _approveTokenIfNeeded(path[0], address(router));
-        router.swapExactTokensForTokens(IERC20(swapToken).balanceOf(address(this)), desiredTokenOutMin, path, address(this), block.timestamp);
-
-        _returnAssets(path);
-    }
-
-    function _removeLiqudity(address pair, address to) private {
-        IERC20(pair).safeTransfer(pair, IERC20(pair).balanceOf(address(this)));
-        (uint256 amount0, uint256 amount1) = IUniswapV2Pair(pair).burn(to);
-
-        require(amount0 >= minimumAmount, 'UniswapV2Router: INSUFFICIENT_A_AMOUNT');
-        require(amount1 >= minimumAmount, 'UniswapV2Router: INSUFFICIENT_B_AMOUNT');
+    function _removeLiqudity(address pair, uint _withdrawAmount) private {
+        uint256[4] memory minIn = [uint256(0), uint256(0), uint256(0), uint256(0)];
+        IMasterChef(pair).withdraw(_withdrawAmount, msg.sender, address(this), minIn);
     }
 
     function _getVaultPair (address _vault) private pure returns (IVault vault, IUniswapV2Pair pair) {
         vault = IVault(_vault);
         pair = IUniswapV2Pair(vault.want());
-        // require(pair.factory() == router.factory(), 'Zap: Incompatible liquidity pair factory');//TODO: HERE MAYBE PROBLEM
     }
 
     function _swapAndStake(address _vault, uint256 tokenAmountOutMin, address tokenIn) private {
-        (, int price, , , ) = yeller.priceFeedWeth.latestRoundData();
-        console.log(price, ' HEREEEEEEEEEEEEEEEEEEEEEEE');
         (IVault vault, IUniswapV2Pair pair) = _getVaultPair(_vault);
 
-        // (uint256 reserveA, uint256 reserveB,) = pair.getReserves(); //TODO: ORIGIN
-        console.log(address(pair));
-        (uint256 reserveA, uint256 reserveB) = pair.getTotalAmounts(); //TODO: NEW maybe change to total0 and total1, need to check console
-        console.log(reserveA, 'FIRST RESERVER');//TODO: CHECK THIS 
-        console.log(reserveB, 'SECOND RESERVER');//TODO: CHECK THIS 
+        (uint256 reserveA, uint256 reserveB) = pair.getTotalAmounts();
         require(reserveA > minimumAmount && reserveB > minimumAmount, 'Zap: Liquidity pair reserves too low');
 
         require(pair.token0() == tokenIn, 'Zap: Input token not present in liqudity pair');
@@ -927,27 +475,24 @@ contract gammaUWZap {
         address[] memory path = new address[](2);
         path[0] = tokenIn;
         path[1] = pair.token1();
-        console.log(pair.token1(), 'pair.token1()');
 
         uint256 fullInvestment = IERC20(tokenIn).balanceOf(address(this));
         uint256 swapAmountIn = _getSwapAmount(fullInvestment, reserveA, reserveB);
-
 
         _approveTokenIfNeeded(path[0], address(router));
         uint256[] memory swapedAmounts = router
             .swapExactTokensForTokens(swapAmountIn, tokenAmountOutMin, path, address(this), block.timestamp);
 
-        _approveTokenIfNeeded(path[1], address(router)); 
+        uint middleAmount = getLiqAmount(address(pair), path[1], swapedAmounts[1]);
+
+        _approveTokenIfNeeded(path[0], address(pair)); 
+        _approveTokenIfNeeded(path[1], address(pair)); 
         uint256[4] memory minIn = [uint256(0), uint256(0), uint256(0), uint256(0)];
-        console.log(fullInvestment.sub(swapedAmounts[0]), 'fullInvestment.sub(swapedAmounts[0])');
-        console.log(swapedAmounts[1], 'swapedAmounts[1]');
         uint256 amountLiquidity = routerLiq
-              .deposit(fullInvestment.sub(swapedAmounts[0]), swapedAmounts[1], address(this), address(pair), minIn);
-        console.log(address(pair)); //TODO: CHECK THIS 
+              .deposit(middleAmount, swapedAmounts[1], address(this), address(pair), minIn);
 
         _approveTokenIfNeeded(address(pair), address(vault));
         vault.deposit(amountLiquidity);
-
         vault.safeTransfer(address(this), vault.balanceOf(address(this)));
 
         uint sharesBal = vault.balanceOf(address(this));
@@ -955,6 +500,12 @@ contract gammaUWZap {
         yeller.deposit(0, sharesBal, msg.sender);
         
         _returnAssets(path);
+    }
+
+    function getLiqAmount(address _pair, address _path, uint _swapedAmounts) internal view returns(uint) {
+        (uint256 amountNeededUsdcMin, uint256 amountNeededUsdcMax)= routerLiq.getDepositAmount(_pair, _path, _swapedAmounts);
+        uint middleAmount = (amountNeededUsdcMin + amountNeededUsdcMax) / 2;
+        return middleAmount;
     }
 
     function _returnAssets(address[] memory tokens) private {
@@ -974,32 +525,15 @@ contract gammaUWZap {
     }
 
     function _getSwapAmount(uint256 investmentA, uint256 reserveA, uint256 reserveB) private view returns (uint256 swapAmount) {
-        uint256 halfInvestment = investmentA / 2; //TODO: NEED CALCULATE HOW MUCH NEED 
-        uint256 nominator = router.getAmountOut(halfInvestment, reserveA, reserveB);
-        uint256 denominator = router.quote(halfInvestment, reserveA.add(halfInvestment), reserveB.sub(nominator));
-        swapAmount = investmentA.sub(Babylonian.sqrt(halfInvestment * halfInvestment * nominator / denominator));
-    }
+        uint wethPriceUsdt = yeller.getWethData();
+        
+        uint wethUsdt = reserveB * wethPriceUsdt / 1e18;
+        uint stableUsdt = reserveA * 1e18 / 1e6;
+        
+        uint stablesInLp = wethUsdt + stableUsdt;
+        uint partWethInLp = wethUsdt * 1e18 / stablesInLp;
 
-    function estimateSwap(address _vault, address tokenIn, uint256 fullInvestmentIn) public view returns(uint256 swapAmountIn, uint256 swapAmountOut, address swapTokenOut) {
-        checkWETH();
-        (, IUniswapV2Pair pair) = _getVaultPair(_vault);
-
-        bool isInputA = pair.token0() == tokenIn;
-        require(isInputA || pair.token1() == tokenIn, 'Zap: Input token not present in liqudity pair');
-
-        // (uint256 reserveA, uint256 reserveB,) = pair.getReserves(); //TODO: ORIGIN
-        (uint256 reserveA, uint256 reserveB) = pair.getTotalAmounts();
-        (reserveA, reserveB) = isInputA ? (reserveA, reserveB) : (reserveB, reserveA);
-
-        swapAmountIn = _getSwapAmount(fullInvestmentIn, reserveA, reserveB);
-        // swapAmountOut = router.getAmountOut(swapAmountIn, reserveA, reserveB, fee); //TODO: ORIGIN
-        swapAmountOut = router.getAmountOut(swapAmountIn, reserveA, reserveB);
-        swapTokenOut = isInputA ? pair.token1() : pair.token0();
-    }
-
-    function checkWETH() public view returns (bool isValid) {
-        isValid = WETH == router.WETH();
-        require(isValid, 'Zap: WETH address not matching Router.WETH()');
+        swapAmount = investmentA * partWethInLp / 1e18;
     }
 
     function _approveTokenIfNeeded(address token, address spender) private {
@@ -1008,4 +542,11 @@ contract gammaUWZap {
         }
     }
 
+    function newYeller(address _yeller) external onlyOwner {
+        yeller = IYeller(_yeller);
+    }
+
+    function yellerAddr() public view returns(address){
+        return address(yeller);
+    }
 }
